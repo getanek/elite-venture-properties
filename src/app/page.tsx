@@ -23,13 +23,23 @@ export default async function DashboardPage({
   searchParams: Promise<{ filter?: string }>;
 }) {
   const { filter } = await searchParams;
-  const { data, error } = await supabaseAdmin
-    .from("contracts")
-    .select("*")
-    .order("end_date", { ascending: true });
+  let data: Array<Record<string, string>> = [];
+  let error: { message: string } | null = null;
+  let setupNeeded = false;
+  try {
+    const res = await supabaseAdmin
+      .from("contracts")
+      .select("*")
+      .order("end_date", { ascending: true });
+    data = (res.data ?? []) as Array<Record<string, string>>;
+    error = res.error;
+  } catch (e) {
+    setupNeeded = true;
+    error = { message: e instanceof Error ? e.message : "Setup required" };
+  }
 
-  const contracts = (data ?? []).filter((c) => {
-    if (filter === "expiring") return daysUntil(c.end_date) <= 30;
+  const contracts = data.filter((c) => {
+    if (filter === "expiring") return daysUntil(c.end_date as string) <= 30;
     return true;
   });
 
@@ -65,7 +75,27 @@ export default async function DashboardPage({
 
       <div className="gold-rule mt-6 mb-6" />
 
-      {error && (
+      {setupNeeded && (
+        <div
+          className="wood-panel rounded-xl p-5 mb-6"
+          style={{ borderLeft: "3px solid var(--gold-deep)" }}
+        >
+          <div
+            className="text-[10px] tracking-[0.25em] uppercase font-semibold mb-1"
+            style={{ color: "var(--gold-deep)" }}
+          >
+            Setup Required
+          </div>
+          <div className="serif text-lg" style={{ color: "var(--walnut-deep)" }}>
+            Awaiting Supabase service role key
+          </div>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+            Add <code>SUPABASE_SERVICE_ROLE_KEY</code> and <code>RESEND_API_KEY</code> in Vercel,
+            then redeploy. Schema and storage bucket are already provisioned.
+          </p>
+        </div>
+      )}
+      {!setupNeeded && error && (
         <div className="text-sm mb-4" style={{ color: "var(--danger)" }}>
           DB error: {error.message}
         </div>
